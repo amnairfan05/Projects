@@ -1,1 +1,588 @@
+import java.sql.*;
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+
+public class AdminFrame extends JFrame {
+
+    private static final long serialVersionUID = 1L;
+
+    private Connection con;
+
+    public AdminFrame(Connection con) {
+        this.con = con;
+        initialize();
+    }
+
+    public void initialize() {
+
+        // ===== TITLE =====
+        JLabel label = new JLabel("Admin Menu");
+        label.setFont(new Font("Lucida Sans", Font.BOLD, 22));
+        label.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // ===== BUTTONS =====
+        JButton addUserBtn = new JButton("Add Customer / Rep");
+        JButton editUserBtn = new JButton("Edit Customer / Rep");
+        JButton deleteUserBtn = new JButton("Delete Customer / Rep");
+
+        JButton salesReportBtn = new JButton("Monthly Sales Report");
+
+        JButton reservationFlightBtn = new JButton("Reservations by Flight");
+        JButton reservationCustomerBtn = new JButton("Reservations by Customer");
+
+        JButton revenueFlightBtn = new JButton("Revenue by Flight");
+        JButton revenueAirlineBtn = new JButton("Revenue by Airline");
+        JButton revenueCustomerBtn = new JButton("Revenue by Customer");
+
+        JButton topCustomerBtn = new JButton("Highest Revenue Customer");
+
+        JButton activeFlightsBtn = new JButton("Most Active Flights");
+
+        // ===== BUTTON PANEL =====
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new GridLayout(6, 2, 15, 15));
+        buttonPanel.setBackground(new Color(255, 228, 181));
+
+        buttonPanel.add(addUserBtn);
+        buttonPanel.add(editUserBtn);
+
+        buttonPanel.add(deleteUserBtn);
+        buttonPanel.add(salesReportBtn);
+
+        buttonPanel.add(reservationFlightBtn);
+        buttonPanel.add(reservationCustomerBtn);
+
+        buttonPanel.add(revenueFlightBtn);
+        buttonPanel.add(revenueAirlineBtn);
+
+        buttonPanel.add(revenueCustomerBtn);
+        buttonPanel.add(topCustomerBtn);
+
+        buttonPanel.add(activeFlightsBtn);
+
+        // ===== MAIN PANEL =====
+        JPanel mainPanel = new JPanel(new BorderLayout(20, 20));
+        mainPanel.setBackground(new Color(255, 228, 181));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40));
+
+        mainPanel.add(label, BorderLayout.NORTH);
+        mainPanel.add(buttonPanel, BorderLayout.CENTER);
+
+        this.add(mainPanel);
+
+        this.setTitle("Admin");
+        this.setSize(700, 500);
+        this.setLocationRelativeTo(null);
+        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.setVisible(true);
+
+        // ===== BUTTON ACTIONS =====
+
+        // ADD USER
+        addUserBtn.addActionListener(e -> addUser());
+
+        // EDIT USER
+        editUserBtn.addActionListener(e -> editUser());
+
+        // DELETE USER
+        deleteUserBtn.addActionListener(e -> deleteUser());
+
+        // SALES REPORT
+        salesReportBtn.addActionListener(e -> monthlySalesReport());
+
+        // RESERVATIONS BY FLIGHT
+        reservationFlightBtn.addActionListener(e -> reservationsByFlight());
+
+        // RESERVATIONS BY CUSTOMER
+        reservationCustomerBtn.addActionListener(e -> reservationsByCustomer());
+
+        // REVENUE BY FLIGHT
+        revenueFlightBtn.addActionListener(e -> revenueByFlight());
+
+        // REVENUE BY AIRLINE
+        revenueAirlineBtn.addActionListener(e -> revenueByAirline());
+
+        // REVENUE BY CUSTOMER
+        revenueCustomerBtn.addActionListener(e -> revenueByCustomer());
+
+        // TOP CUSTOMER
+        topCustomerBtn.addActionListener(e -> highestRevenueCustomer());
+
+        // ACTIVE FLIGHTS
+        activeFlightsBtn.addActionListener(e -> mostActiveFlights());
+    }
+
+    // =========================================================
+    // ADD USER
+    // =========================================================
+
+    private void addUser() {
+
+        JTextField uidField = new JTextField();
+        JTextField usernameField = new JTextField();
+        JTextField passwordField = new JTextField();
+
+        String[] roles = {"customer", "rep"};
+        JComboBox<String> roleBox = new JComboBox<>(roles);
+
+        Object[] fields = {
+                "UID:", uidField,
+                "Username:", usernameField,
+                "Password:", passwordField,
+                "Role:", roleBox
+        };
+
+        int result = JOptionPane.showConfirmDialog(
+                this,
+                fields,
+                "Add User",
+                JOptionPane.OK_CANCEL_OPTION
+        );
+
+        if (result == JOptionPane.OK_OPTION) {
+
+            try {
+
+                String sql = "INSERT INTO Users(uid, username, password, role) VALUES (?, ?, ?, ?)";
+
+                PreparedStatement ps = con.prepareStatement(sql);
+
+                ps.setString(1, uidField.getText());
+                ps.setString(2, usernameField.getText());
+                ps.setString(3, passwordField.getText());
+                ps.setString(4, roleBox.getSelectedItem().toString());
+
+                ps.executeUpdate();
+
+                JOptionPane.showMessageDialog(this, "User Added Successfully");
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage());
+            }
+        }
+    }
+
+    // =========================================================
+    // EDIT USER
+    // =========================================================
+
+    private void editUser() {
+
+        String uid = JOptionPane.showInputDialog(this, "Enter UID to Edit");
+
+        if (uid == null || uid.isEmpty()) {
+            return;
+        }
+
+        try {
+
+            String sql = "SELECT * FROM Users WHERE uid = ?";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+            ps.setString(1, uid);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+
+                JTextField usernameField = new JTextField(rs.getString("username"));
+                JTextField passwordField = new JTextField(rs.getString("password"));
+
+                String[] roles = {"customer", "rep", "admin"};
+                JComboBox<String> roleBox = new JComboBox<>(roles);
+                roleBox.setSelectedItem(rs.getString("role"));
+
+                Object[] fields = {
+                        "Username:", usernameField,
+                        "Password:", passwordField,
+                        "Role:", roleBox
+                };
+
+                int result = JOptionPane.showConfirmDialog(
+                        this,
+                        fields,
+                        "Edit User",
+                        JOptionPane.OK_CANCEL_OPTION
+                );
+
+                if (result == JOptionPane.OK_OPTION) {
+
+                    String update =
+                            "UPDATE Users SET username=?, password=?, role=? WHERE uid=?";
+
+                    PreparedStatement ups = con.prepareStatement(update);
+
+                    ups.setString(1, usernameField.getText());
+                    ups.setString(2, passwordField.getText());
+                    ups.setString(3, roleBox.getSelectedItem().toString());
+                    ups.setString(4, uid);
+
+                    ups.executeUpdate();
+
+                    JOptionPane.showMessageDialog(this, "User Updated");
+                }
+
+            } else {
+                JOptionPane.showMessageDialog(this, "User Not Found");
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // DELETE USER
+    // =========================================================
+
+    private void deleteUser() {
+
+        String uid = JOptionPane.showInputDialog(this, "Enter UID to Delete");
+
+        if (uid == null || uid.isEmpty()) {
+            return;
+        }
+
+        try {
+
+            String sql = "DELETE FROM Users WHERE uid = ?";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, uid);
+
+            int rows = ps.executeUpdate();
+
+            if (rows > 0) {
+                JOptionPane.showMessageDialog(this, "User Deleted");
+            } else {
+                JOptionPane.showMessageDialog(this, "User Not Found");
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // MONTHLY SALES REPORT
+    // =========================================================
+
+    private void monthlySalesReport() {
+
+        String month = JOptionPane.showInputDialog(this,
+                "Enter Month (YYYY-MM)");
+
+        try {
+
+            String sql =
+                    "SELECT SUM(total_fare + booking_fee) AS revenue " +
+                    "FROM Tickets " +
+                    "WHERE DATE_FORMAT(purchase_time, '%Y-%m') = ?";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, month);
+
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+
+                double revenue = rs.getDouble("revenue");
+
+                JOptionPane.showMessageDialog(this,
+                        "Total Revenue for " + month + ": $" + revenue);
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // RESERVATIONS BY FLIGHT
+    // =========================================================
+
+    private void reservationsByFlight() {
+
+        String flightNum = JOptionPane.showInputDialog(
+                this,
+                "Enter Flight Number"
+        );
+
+        try {
+
+            String sql =
+                    "SELECT t.tid, c.first_name, c.last_name, f.flight_number " +
+                    "FROM Tickets t " +
+                    "JOIN Customers c ON t.cid = c.cid " +
+                    "JOIN Ticket_Flights tf ON t.tid = tf.tid " +
+                    "JOIN Flight_Instances fi ON tf.instance_id = fi.instance_id " +
+                    "JOIN Flights f ON fi.fid = f.fid " +
+                    "WHERE f.flight_number = ?";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, flightNum);
+
+            ResultSet rs = ps.executeQuery();
+
+            displayResultSet(rs, "Reservations for Flight " + flightNum);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // RESERVATIONS BY CUSTOMER
+    // =========================================================
+
+    private void reservationsByCustomer() {
+
+        String customerId = JOptionPane.showInputDialog(
+                this,
+                "Enter Customer ID"
+        );
+
+        if (customerId == null || customerId.trim().isEmpty()) return;
+
+        try {
+            String sql =
+                    "SELECT " +
+                    "t.tid, " +
+                    "c.cid, " +
+                    "c.first_name, " +
+                    "c.last_name, " +
+                    "t.ticket_type, " +
+                    "t.status, " +
+                    "t.total_fare, " +
+                    "t.booking_fee, " +
+                    "fi.flight_date, " +
+                    "f.flight_number, " +
+                    "f.d_apid, " +
+                    "f.a_apid, " +
+                    "f.depart_time, " +
+                    "f.arrival_time, " +
+                    "tf.seat_class, " +
+                    "tf.seat_number, " +
+                    "tf.segment_order " +
+                    "FROM Tickets t " +
+                    "JOIN Customers c ON t.cid = c.cid " +
+                    "JOIN Ticket_Flights tf ON t.tid = tf.tid " +
+                    "JOIN Flight_Instances fi ON tf.instance_id = fi.instance_id " +
+                    "JOIN Flights f ON fi.fid = f.fid AND fi.aid = f.aid " +
+                    "WHERE c.cid = ? " +
+                    "ORDER BY t.tid, tf.segment_order";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+            ps.setString(1, customerId.trim());
+
+            ResultSet rs = ps.executeQuery();
+
+            displayResultSet(rs, "Reservations for Customer " + customerId);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // REVENUE BY FLIGHT
+    // =========================================================
+
+    private void revenueByFlight() {
+
+        String flight = JOptionPane.showInputDialog(this,
+                "Enter Flight Number");
+
+        try {
+
+            String sql =
+                    "SELECT f.flight_number, " +
+                    "SUM(t.total_fare + t.booking_fee) AS revenue " +
+                    "FROM Tickets t " +
+                    "JOIN Ticket_Flights tf ON t.tid = tf.tid " +
+                    "JOIN Flight_Instances fi ON tf.instance_id = fi.instance_id " +
+                    "JOIN Flights f ON fi.fid = f.fid " +
+                    "WHERE f.flight_number = ? " +
+                    "GROUP BY f.flight_number";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, flight);
+
+            ResultSet rs = ps.executeQuery();
+
+            displayResultSet(rs, "Revenue By Flight");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // REVENUE BY AIRLINE
+    // =========================================================
+
+    private void revenueByAirline() {
+
+        String airline = JOptionPane.showInputDialog(this,
+                "Enter Airline ID");
+
+        try {
+
+            String sql =
+                    "SELECT f.aid, " +
+                    "SUM(t.total_fare + t.booking_fee) AS revenue " +
+                    "FROM Tickets t " +
+                    "JOIN Ticket_Flights tf ON t.tid = tf.tid " +
+                    "JOIN Flight_Instances fi ON tf.instance_id = fi.instance_id " +
+                    "JOIN Flights f ON fi.fid = f.fid " +
+                    "WHERE f.aid = ? " +
+                    "GROUP BY f.aid";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, airline);
+
+            ResultSet rs = ps.executeQuery();
+
+            displayResultSet(rs, "Revenue By Airline");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // REVENUE BY CUSTOMER
+    // =========================================================
+
+    private void revenueByCustomer() {
+
+        String customer = JOptionPane.showInputDialog(
+                this,
+                "Enter Customer ID"
+        );
+
+        try {
+
+            String sql =
+                    "SELECT cid, " +
+                    "SUM(total_fare + booking_fee) AS revenue " +
+                    "FROM Tickets " +
+                    "WHERE cid = ? " +
+                    "GROUP BY cid";
+
+            PreparedStatement ps = con.prepareStatement(sql);
+
+            ps.setString(1, customer);
+
+            ResultSet rs = ps.executeQuery();
+
+            displayResultSet(rs, "Revenue By Customer");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // HIGHEST REVENUE CUSTOMER
+    // =========================================================
+
+    private void highestRevenueCustomer() {
+
+        try {
+
+            String sql =
+                    "SELECT cid, " +
+                    "SUM(total_fare + booking_fee) AS revenue " +
+                    "FROM Tickets " +
+                    "GROUP BY cid " +
+                    "ORDER BY revenue DESC " +
+                    "LIMIT 1";
+
+            Statement st = con.createStatement();
+
+            ResultSet rs = st.executeQuery(sql);
+
+            displayResultSet(rs, "Highest Revenue Customer");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // MOST ACTIVE FLIGHTS
+    // =========================================================
+
+    private void mostActiveFlights() {
+
+        try {
+
+            String sql =
+                    "SELECT f.flight_number, COUNT(tf.tid) AS tickets_sold " +
+                    "FROM Ticket_Flights tf " +
+                    "JOIN Flight_Instances fi ON tf.instance_id = fi.instance_id " +
+                    "JOIN Flights f ON fi.fid = f.fid " +
+                    "GROUP BY f.flight_number " +
+                    "ORDER BY tickets_sold DESC";
+
+            Statement st = con.createStatement();
+
+            ResultSet rs = st.executeQuery(sql);
+
+            displayResultSet(rs, "Most Active Flights");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage());
+        }
+    }
+
+    // =========================================================
+    // DISPLAY RESULT SET IN TABLE
+    // =========================================================
+
+    private void displayResultSet(ResultSet rs, String title)
+            throws SQLException {
+
+        ResultSetMetaData meta = rs.getMetaData();
+
+        int columns = meta.getColumnCount();
+
+        DefaultTableModel model = new DefaultTableModel();
+
+        for (int i = 1; i <= columns; i++) {
+            model.addColumn(meta.getColumnName(i));
+        }
+
+        while (rs.next()) {
+
+            Object[] row = new Object[columns];
+
+            for (int i = 1; i <= columns; i++) {
+                row[i - 1] = rs.getObject(i);
+            }
+
+            model.addRow(row);
+        }
+
+        JTable table = new JTable(model);
+
+        JScrollPane scrollPane = new JScrollPane(table);
+
+        JFrame frame = new JFrame(title);
+
+        frame.add(scrollPane);
+
+        frame.setSize(700, 400);
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+    }
+}
 
