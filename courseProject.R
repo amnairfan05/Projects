@@ -1,0 +1,216 @@
+#Sets the working dictionary to where the csv file is.
+setwd("C:/Users/irfan/OneDrive/Documents/Data101")
+getwd()
+
+library(rpart)
+library(rpart.plot)
+library(rsample)
+library(klaR)
+library(caret)
+library(ggplot2)
+library(naivebayes)
+
+
+set.seed(1234)
+df <- read.csv("medical_costs.csv")
+
+#Preview data
+dim(df)
+summary(df)
+str(df)
+head(df)
+
+#Removes any rows with missing value
+df <- na.omit(df)
+
+#Checking to see if any row got removed.
+dim(df)
+
+#Creates age groups
+df$AgeGroup <- cut(df$Age,
+                   breaks = c(18, 25, 35, 45, 55, 65),
+                   right = TRUE,  # include the right endpoint
+                   labels = c("18-25", "26-35", "36-45", "46-55", "56-65"),
+                   include.lowest = TRUE) # this ensures 18 is included too
+
+df$AgeGroup <- factor(df$AgeGroup, levels = c("18-25", "26-35", "36-45", "46-55", "56-65"))
+
+
+#Turns all the values into factors rather than strings.
+df$Sex <- factor(df$Sex)
+df$Smoker <- factor(df$Smoker)
+df$Region <- factor(df$Region)
+#Renames Medical Cost to Cost to make it easier to code.
+names(df)[names(df) == "Medical.Cost"] <- "Cost"
+#Creates BMI groups.
+df$BMI_Category <- cut(df$BMI, 
+                       breaks = c(0, 18.5, 24.9, 29.9, 100), 
+                       labels = c("Underweight", "Healthy", "Overweight", "Obese"))
+# Create a new factor: Cost_Category
+# Define a cutoff at the median cost
+cost_cutoff <- median(df$Cost)
+df$Cost_Category <- ifelse(df$Cost > cost_cutoff, "High", "Low")
+df$Cost_Category <- as.factor(df$Cost_Category)
+
+#View data with the new factors added
+head(df)
+summary(df)
+
+
+#Visualizations:
+#Age vs Box plot
+boxplot(Cost ~ AgeGroup, data = df, main = "Medical Costs by Age Group", ylab = "Cost", xlab = "Age Group")
+
+#BMI scatter plot
+ggplot(df, aes(x = BMI, y = Cost)) +
+  geom_point(color = "royalblue", size = 2) +   # points
+  geom_smooth(method = "lm", color = "red", se = FALSE) +  # trend line
+  labs(
+    title = "BMI vs Medical Cost",
+    x = "BMI",
+    y = "Medical Cost"
+  ) +
+  theme_minimal()
+
+#Simple linear regression for BMI vs Cost
+model_lm <- lm(Cost ~ BMI, data = df)
+summary(model_lm)
+
+#Smoker box plot
+boxplot(Cost ~ Smoker, data = df, main = "Medical Costs by Smoker Status", ylab = "Cost", xlab = "Smoker Status")
+
+
+
+
+#Classification Tree
+data_split <- initial_split(df, prop=0.80)
+data_split
+
+training_data <- training(data_split)
+testing_data <- testing(data_split)
+
+prop.table(table(training_data$Cost_Category))
+prop.table(table(testing_data$Cost_Category))
+
+
+tree_model <- rpart(Cost_Category ~ Smoker + BMI_Category + AgeGroup, 
+                    data = training_data, 
+                    method = "class",
+                    control = rpart.control(cp = 0.004, minsplit = 2))
+
+rpart.plot(tree_model, type = 4, extra = 104, box.palette = "Blues", shadow.col = "gray", main = "Decision Tree")
+printcp(tree_model)
+
+
+
+
+
+#Confusion Matrix for Classification Tree
+predict_CT <- predict(tree_model, testing_data, type="class")
+confusion_M_CT <- table(predict_CT, testing_data$Cost_Category)
+confusion_M_CT
+cm_tree <- caret::confusionMatrix(confusion_M_CT, positive="High")
+cm_tree
+
+
+
+#Cross Validation (10 folds) for Decision Tree
+control <- trainControl(method='cv', number = 10, savePredictions = TRUE)
+rpart_with_cv <- train(Cost_Category ~ ., data = training_data, method = 'rpart',
+                       trControl = control)
+print(rpart_with_cv)
+
+#Finds the best cp value.
+best_cp_from_cv <-
+  rpart_with_cv$results[which.max(rpart_with_cv$results[,'Kappa']),"cp"]
+best_cp_from_cv
+
+
+final_tree <- rpart(Cost_Category ~ ., data = training_data, method = 'class',
+                    control=rpart.control(cp=best_cp_from_cv))
+print(final_tree)
+
+rpart.plot(final_tree, fallen.leaves = FALSE)
+
+
+
+predict_final_tree <- predict(final_tree, testing_data, type="class")
+confusion_final_tree <- table(predict_final_tree, testing_data$Cost_Category)
+confusion_final_tree
+
+ten_fold_tree <- caret::confusionMatrix(confusion_final_tree, positive="High")
+ten_fold_tree
+
+
+
+
+#NB Model
+NB_model <- NaiveBayes(Cost_Category ~ Age + BMI + Smoker, data = training_data)
+NB_prediction <- predict(NB_model, testing_data)
+
+
+confusion_matrix_NB <- table(NB_prediction$class, testing_data$Cost_Category)
+confusion_matrix_NB
+cm_nb <- caret::confusionMatrix(confusion_matrix_NB, positive="High")
+cm_nb
+
+
+#Cross Validation (10 folds) for Naive Bayes
+NB_control <- trainControl(method='cv', number=10, savePredictions = TRUE)
+cross_val_NB <- train(Cost_Category ~ ., data=training_data, trControl = NB_control,
+                      method="naive_bayes")
+cross_val_NB
+
+
+
+
+
+#Compare both accuracies:
+accuracy_tree <- cm_tree$overall['Accuracy']
+accuracy_nb <- cm_nb$overall['Accuracy']
+
+# Create a data frame for plotting
+accuracy_df <- data.frame(
+  Model = c("Classification Tree", "Naive Bayes"),
+  Accuracy = c(as.numeric(accuracy_tree), as.numeric(accuracy_nb))
+)
+
+
+# Plot bar chart
+ggplot(accuracy_df, aes(x = Model, y = Accuracy, fill = Model)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  expand_limits(y = c(0, 1.05)) +
+  labs(title = "Model Accuracy Comparison",
+       y = "Accuracy",
+       x = "Model") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Classification Tree" = "red", "Naive Bayes" = "blue")) +
+  geom_text(aes(label = round(Accuracy, 3)), vjust = -0.5, size = 5)
+
+
+
+
+
+
+
+
+# Scatterplot for BMI vs Cost for Smokers and Non-Smokers
+ggplot(df, aes(x = BMI, y = Cost, color = Smoker)) +
+  geom_point() +
+  labs(title = "BMI vs Medical Cost by Smoking Status",
+       x = "BMI",
+       y = "Medical Cost") +
+  scale_color_manual(values = c("blue", "red"), 
+                     labels = c("Non-Smoker", "Smoker")) +
+  theme_minimal()
+
+# Scatterplot for Age vs Cost for Smokers and Non-Smokers
+ggplot(df, aes(x = Age, y = Cost, color = Smoker)) +
+  geom_point() +
+  labs(title = "Age vs Medical Cost by Smoking Status",
+       x = "Age",
+       y = "Medical Cost") +
+  scale_color_manual(values = c("blue", "red"), 
+                     labels = c("Non-Smoker", "Smoker")) +
+  theme_minimal()
+
